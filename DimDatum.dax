@@ -1,0 +1,43 @@
+﻿-- EVALUATE ADDCOLUMNS ( -- První řádek umožňuje spustit v DAX Studio. Odkomentovat tento řádek a zakomentovat ten řádek pod ním.
+DimDatum = -- Toto je pro Power BI
+-- 		 = -- Toto je pro SSAS (analysis services). Nedává se tam název, tabulka se musí přejmenovat ručně.
+VAR VARDenPrvni = MINX( {MIN(FactPohyby[DATUM]), MIN( 'FactPlán'[DATUM])},[Value] ) -- DatumOd bude minimum z datumovách sloupců faktových dimenzí, nezaokrouhleno na 1.1
+VAR VARDenPosledni = DATE ( YEAR ( MINX( { MAX(FactPohyby[DATUM]),MAX('FactPlán'[DATUM])  },[Value] )) , 12, 31 ) -- DatumDo bude maximum z datumovách sloupců faktových dimenzí zakrouhleno na 31.12.
+VAR VARSvatky = DATATABLE ("Date", DATETIME,{/*velikonoce*/ {"2001-01-16"},{"2002-04-01"},{"2003-04-21"},{"2004-04-12"},{"2005-03-28"},{"2006-04-17"},{"2007-04-09"},{"2008-03-24"},{"2009-04-13"},{"2010-04-05"},{"2011-04-25"},{"2012-04-09"},{"2013-04-01"},{"2014-04-21"},{"2015-04-06"},{"2016-03-28"},{"2017-04-17"},{"2018-04-02"},{"2019-04-22"},{"2020-04-13"},{"2021-04-05"},{"2022-04-18"},{"2023-04-10"},{"2024-04-01"},{"2025-04-21"},{"2026-04-06"},{"2027-03-29"},{"2028-04-17"},{"2029-04-02"},{"2030-04-22"} /*a velký pátek*/,{"2016-03-25"},{"2017-04-14"},{"2018-03-30"},{"2019-04-19"},{"2020-04-10"},{"2021-04-02"},{"2022-04-15"},{"2023-04-07"},{"2024-03-29"},{"2025-04-18"},{"2026-04-03"},{"2027-03-26"},{"2028-04-14"},{"2029-03-30"},{"2030-04-19"} }) --svátky jsou od 2001 do 2030. Názvy svátků imho nejsou třeba.
+VAR VARDimDatum = ADDCOLUMNS ( --[Date] je hodnota datumu, row context
+	CALENDAR (VARDenPrvni, VARDenPosledni)
+    ,"Datum",  FORMAT ( [Date], "YYYY-MM-DD" )
+	--"DateInt", FORMAT ( [Date], "YYYYMMDD" ),
+	,"Rok", YEAR ( [Date] ) //
+    ,"Měsíc", YEAR ( [Date] ) & "-" & FORMAT ( [Date], "MM" )
+	,"Měsíc v roce", FORMAT ( [Date], "mmmm" )    
+	,"Měsíc v roce č", FORMAT ( [Date], "MM" )
+	,"Měsíc v roce zkr", FORMAT ( [Date], "mmm" )
+    ,"Kvartál", FORMAT ( [Date], "YY" ) & "Q" & FORMAT ( [Date], "Q" )
+    ,"Kvartál v roce", "Q" & FORMAT ( [Date], "Q" )
+    ,"Týden" /*, FORMAT ( [Date], "YY" ) & "" & "T" & FORMAT(WEEKNUM( [Date] ,21), "00" )*/
+    , SWITCH(TRUE(),
+                MONTH([Date]) = 1 && WEEKNUM ([Date],21) > 50, RIGHT(YEAR([Date])-1,2),
+                MONTH([Date]) = 12 && WEEKNUM ([Date],21) = 1, RIGHT(YEAR([Date])+1,2),
+                RIGHT(YEAR([Date]),2)
+            ) & "T" & FORMAT(WEEKNUM ([Date],21), "00")
+    ,"Týden od",[Date]-WEEKDAY ( [Date] ,2)+1
+    ,"Týden do",[Date]+6-WEEKDAY ( [Date] ,2)+1
+    ,"Týden v roce", "T" & FORMAT(WEEKNUM( [Date] ,21), "00" )
+    ,"Týden se dnem",FORMAT ( [Date]-WEEKDAY ( [Date] ,2)+1, "YYYY-MM-DD" ) & " " &  "T" & FORMAT(WEEKNUM( [Date] ,21), "00" )         
+	,"Den v týdnu č", WEEKDAY ( [Date] ,2)
+	,"Den v týdnu", FORMAT ( [Date], "dddd" )
+    ,"Den v týdnu zkr", FORMAT ( [Date], "ddd" )
+    ,"Bude", if ([Date] < TODAY() ,"N","A") --dnešní den je Bude, není ještě ukončený. Předpokládám že se napočítává brzy ráno za minulý den.
+    ,"Budoucnost", if ([Date] < TODAY() ,"Bylo","Bude") -- možný by bylo lepší History/Future.
+    ,"Pracovní",  IF (WEEKDAY ( [Date] ,2) in {6,7}  --soboty a neděle
+                || [Date] in {DATE(YEAR ( [Date] ), 1, 1),DATE(YEAR ( [Date] ), 5, 1),DATE(YEAR ( [Date] ), 5, 8) ,DATE(YEAR ( [Date] ), 7, 5),DATE(YEAR ( [Date] ), 7, 6),DATE(YEAR ( [Date] ), 09,28 ),DATE(YEAR ( [Date] ), 10, 28),DATE(YEAR ( [Date] ), 11, 17),DATE(YEAR ( [Date] ), 12, 24),DATE(YEAR ( [Date] ), 12, 25),DATE(YEAR ( [Date] ), 12, 26)} -- svátky v přesný den a měsíc. Viz https://cs.wikipedia.org/wiki/%C4%8Cesk%C3%BD_st%C3%A1tn%C3%AD_sv%C3%A1tek
+                || [Date] in VARSvatky -- posouvající se svátky (velikonoce, velký pátek)
+                ,"Ne","Ano")   -- možná je lepší "Nepracovní","Pracovní" ?
+    ,"Den index",DATEDIFF(TODAY(),[Date],DAY) --Index?Idx?Offset?Pořadí?Seq?ID?č?
+    ,"Týden index",DATEDIFF(TODAY(),[Date]-1,WEEK)
+    ,"Měsíc index",DATEDIFF(TODAY(),[Date],MONTH)
+    ,"Kvartál index",DATEDIFF(TODAY(),[Date],QUARTER)
+    ,"Rok index",DATEDIFF(TODAY(),[Date],YEAR)
+)
+RETURN    VARDimDatum
